@@ -1,0 +1,7 @@
+[package]
+name = "vulkano-test"
+version = "0.1.0"
+authors = ["Emil Segerbäck <emilsegerback@mykolab.ch>"]
+
+[dependencies]
+vulkano = "0.10"
