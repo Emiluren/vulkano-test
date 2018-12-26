@@ -2,6 +2,8 @@ extern crate image;
 extern crate vulkano;
 #[macro_use]
 extern crate vulkano_shader_derive;
+extern crate vulkano_win;
+extern crate winit;
 
 use std::sync::Arc;
 
@@ -18,18 +20,23 @@ use vulkano::instance::InstanceExtensions;
 use vulkano::instance::PhysicalDevice;
 use vulkano::instance::Features;
 use vulkano::pipeline::ComputePipeline;
+use vulkano::swapchain::{Swapchain, SurfaceTransform, PresentMode};
 use vulkano::sync::GpuFuture;
+
+use vulkano_win::VkSurfaceBuild;
+use winit::EventsLoop;
+use winit::WindowBuilder;
 
 mod compiled_shader {
     #[derive(VulkanoShader)]
     #[ty = "compute"]
     #[path = "src/mandelbrot.glsl"]
-    struct Dummy;
+    struct _Dummy;
 }
 
 fn main() {
-    let instance = Instance::new(None, &InstanceExtensions::none(), None)
-        .expect("failed to create instance");
+    let extensions = vulkano_win::required_extensions();
+    let instance = Instance::new(None, &extensions, None).expect("failed to create instance");
     println!("Created instance");
 
     let physical = PhysicalDevice::enumerate(&instance).next().expect("no device available");
@@ -43,8 +50,16 @@ fn main() {
         .expect("couln't find a graphical queue family");
 
     let (device, mut queues) = {
-        Device::new(physical, &Features::none(), &DeviceExtensions::none(),
-                    [(queue_family, 0.5)].iter().cloned()).expect("failed to create device")
+        let device_ext = vulkano::device::DeviceExtensions {
+            khr_swapchain: true,
+            .. vulkano::device::DeviceExtensions::none()
+        };
+
+        Device::new(
+            physical,
+            &physical.supported_features(),
+            &device_ext,
+            [(queue_family, 0.5)].iter().cloned()).expect("failed to create device")
     };
 
     let queue = queues.next().unwrap();
@@ -86,5 +101,43 @@ fn main() {
 
     let buffer_content = buf.read().unwrap();
     let image = ImageBuffer::<Rgba<u8>, _>::from_raw(1024, 1024, &buffer_content[..]).unwrap();
-    image.save("image.png").unwrap();
+    //image.save("image.png").unwrap();
+    //test
+
+    let mut events_loop = EventsLoop::new();
+    let surface = WindowBuilder::new().build_vk_surface(&events_loop, instance.clone()).unwrap();
+
+    let caps = surface.capabilities(physical)
+        .expect("failed to get surface");
+
+    let dimensions = caps.current_extent.unwrap_or([1280, 1024]);
+    let alpha = caps.supported_composite_alpha.iter().next().unwrap();
+    let format = caps.supported_formats[0].0;
+
+    let (swapchain, images) = Swapchain::new(
+        device.clone(),
+        surface.clone(),
+        caps.min_image_count,
+        format,
+        dimensions,
+        1,
+        caps.supported_usage_flags,
+        &queue,
+        SurfaceTransform::Identity,
+        alpha,
+        PresentMode::Fifo,
+        true,
+        None
+    ).expect("failed to create swapchain");
+
+    let (image_num, acquire_future) = vulkano::swapchain::acquire_next_image(swapchain.clone(), None).unwrap();
+
+    events_loop.run_forever(|event| {
+        match event {
+            winit::Event::WindowEvent { event: winit::WindowEvent::CloseRequested, .. } => {
+                winit::ControlFlow::Break
+            },
+            _ => winit::ControlFlow::Continue,
+        }
+    });
 }

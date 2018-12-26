@@ -6,4 +6,6 @@ authors = ["Emil Segerbäck <emilsegerback@mykolab.ch>"]
 [dependencies]
 vulkano = "0.10"
 vulkano-shader-derive = "0.10.0"
+vulkano-win = "0.10"
+winit = "0.17"
 image = "*"
